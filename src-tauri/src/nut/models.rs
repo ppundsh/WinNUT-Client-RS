@@ -47,6 +47,9 @@ impl UpsData {
         // If we have direct power reporting, use it (parsed elsewhere).
         // If not, calculate from load % and nominal power.
         if self.power_watts.is_none() {
+            self.power_watts = self.ups_realpower;
+        }
+        if self.power_watts.is_none() {
             if let (Some(load), Some(nominal_power)) = (self.ups_load, self.ups_realpower_nominal) {
                 let watts = nominal_power * (load / 100.0);
                 self.power_watts = Some(watts);

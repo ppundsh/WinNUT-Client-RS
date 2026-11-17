@@ -4,6 +4,14 @@ use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
+/// Upper bounds so an unreachable host or a misbehaving server cannot hang the client.
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// A real UPS exposes a few hundred variables at most; refuse endless "lists".
+const MAX_LIST_LINES: usize = 4096;
+/// NUT lines are short; a single huge line is treated as a protocol error.
+const MAX_LINE_BYTES: usize = 8192;
+
 #[derive(Error, Debug)]
 pub enum NutError {
     #[error("IO error: {0}")]
@@ -31,14 +39,31 @@ impl NutClient {
 
     pub async fn connect(&mut self) -> Result<(), NutError> {
         let addr = format!("{}:{}", self.config.host, self.config.port);
-        let stream = TcpStream::connect(&addr).await?;
+        let stream = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr))
+            .await
+            .map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!("connection to {addr} timed out"),
+                )
+            })??;
+        let _ = stream.set_nodelay(true);
         // Wrap the stream in a buffered reader for efficient line-by-line reading
         self.stream = Some(BufReader::new(stream));
 
-        if let Some(username) = &self.config.username {
-            self.send_cmd(&format!("USERNAME {username}")).await?;
-            if let Some(password) = &self.config.password {
-                self.send_cmd(&format!("PASSWORD {password}")).await?;
+        // Empty fields from the settings form mean "no authentication".
+        let username = self.config.username.clone().filter(|u| !u.trim().is_empty());
+        let password = self.config.password.clone().filter(|p| !p.is_empty());
+        if let Some(username) = username {
+            let resp = self.send_cmd(&format!("USERNAME {}", quote_arg(&username)?)).await?;
+            if let Some(code) = super::parser::error_code(&resp) {
+                return Err(NutError::CommandFailed(format!("USERNAME: {code}")));
+            }
+            if let Some(password) = password {
+                let resp = self.send_cmd(&format!("PASSWORD {}", quote_arg(&password)?)).await?;
+                if let Some(code) = super::parser::error_code(&resp) {
+                    return Err(NutError::CommandFailed(format!("PASSWORD: {code}")));
+                }
             }
         }
 
@@ -61,6 +86,10 @@ impl NutClient {
             return Err(NutError::ConnectionFailed);
         }
 
+        // A CR/LF inside a command would let a field value inject a second command.
+        if cmd.contains(['\r', '\n', '\0']) {
+            return Err(NutError::CommandFailed("invalid characters in command".into()));
+        }
         let reader = self.stream.as_mut().unwrap();
         let cmd_with_newline = format!("{cmd}\n");
         reader.write_all(cmd_with_newline.as_bytes()).await?;
@@ -70,7 +99,7 @@ impl NutClient {
         let mut line = String::new();
 
         // 1. Read the first line to determine response type
-        let bytes_read = reader.read_line(&mut line).await?;
+        let bytes_read = read_line_limited(reader, &mut line).await?;
         if bytes_read == 0 {
             return Err(NutError::ConnectionFailed); // EOF
         }
@@ -80,9 +109,14 @@ impl NutClient {
         // 2. Check if this is a multi-line list response
         // NUT protocol lists start with "BEGIN LIST ..."
         if line.starts_with("BEGIN LIST") {
+            let mut lines = 0usize;
             loop {
                 line.clear();
-                let n = reader.read_line(&mut line).await?;
+                lines += 1;
+                if lines > MAX_LIST_LINES {
+                    return Err(NutError::CommandFailed("list response too long".into()));
+                }
+                let n = read_line_limited(reader, &mut line).await?;
                 if n == 0 {
                     break; // Unexpected EOF inside list
                 }
@@ -102,9 +136,23 @@ impl NutClient {
         &mut self,
         ups_name: &str,
     ) -> Result<super::models::UpsData, NutError> {
+        let ups_name = ups_name.trim();
+        if ups_name.is_empty() {
+            return Err(NutError::CommandFailed("UPS name is empty".into()));
+        }
         let cmd = format!("LIST VAR {ups_name}");
         let response = self.send_cmd(&cmd).await?;
-        Ok(super::parser::parse_list_vars(&response))
+        if let Some(code) = super::parser::error_code(&response) {
+            // e.g. UNKNOWN-UPS, ACCESS-DENIED, DATA-STALE, DRIVER-NOT-CONNECTED
+            return Err(NutError::CommandFailed(code));
+        }
+        let data = super::parser::parse_list_vars(&response, ups_name);
+        if data.status.is_empty() {
+            return Err(NutError::CommandFailed(format!(
+                "no ups.status in LIST VAR {ups_name} response"
+            )));
+        }
+        Ok(data)
     }
 
     pub async fn list_ups_names(&mut self) -> Result<Vec<String>, NutError> {
@@ -145,4 +193,28 @@ impl NutClient {
             Err(NutError::CommandFailed(resp))
         }
     }
+}
+
+/// Quotes a protocol argument (NUT allows `"..."` with `\\` and `\"` escapes).
+fn quote_arg(v: &str) -> Result<String, NutError> {
+    if v.chars().any(|c| c.is_control()) {
+        return Err(NutError::CommandFailed("invalid characters in credential".into()));
+    }
+    Ok(format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\"")))
+}
+
+/// Reads one line with a timeout and a length cap.
+async fn read_line_limited(
+    reader: &mut BufReader<TcpStream>,
+    line: &mut String,
+) -> Result<usize, NutError> {
+    let n = tokio::time::timeout(READ_TIMEOUT, reader.read_line(line))
+        .await
+        .map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::TimedOut, "NUT server read timed out")
+        })??;
+    if line.len() > MAX_LINE_BYTES {
+        return Err(NutError::CommandFailed("response line too long".into()));
+    }
+    Ok(n)
 }

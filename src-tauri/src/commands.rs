@@ -19,6 +19,12 @@ pub struct ShutdownTracker {
 
 pub struct ShutdownState(pub Arc<Mutex<ShutdownTracker>>);
 
+/// Handle of the running background polling task. Starting polling again (e.g. after
+/// "Apply Settings") aborts the previous task, so there is never more than one poller
+/// evaluating shutdown conditions at the same time.
+#[derive(Default)]
+pub struct PollingState(pub std::sync::Mutex<Option<tokio::task::AbortHandle>>);
+
 /// Creates a simple 32x32 solid color circle icon programmatically
 fn create_status_icon(r: u8, g: u8, b: u8) -> tauri::image::Image<'static> {
     let size = 32;
@@ -91,15 +97,19 @@ pub struct ShutdownConfig {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri injects each State<> as its own argument.
 pub async fn start_background_polling(
     app: AppHandle,
     state: State<'_, NutState>,
     db_state: State<'_, DbState>,
     shutdown_state: State<'_, ShutdownState>,
+    polling_state: State<'_, PollingState>,
     ups_name: String,
     interval_ms: u64,
     shutdown_config: ShutdownConfig,
 ) -> Result<(), String> {
+    // Never poll faster than 500 ms or slower than 1 min.
+    let interval_ms = interval_ms.clamp(500, 60_000);
     let state_arc = state.0.clone();
     let db_arc = db_state.0.clone();
     let shutdown_arc = shutdown_state.0.clone();
@@ -110,8 +120,8 @@ pub async fn start_background_polling(
     );
     info!("Shutdown Config: {:?}", shutdown_config);
 
-    // Spawn a background task
-    tokio::spawn(async move {
+    // Spawn a background task (replacing any previous one).
+    let task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(interval_ms));
         let mut last_log_time = std::time::Instant::now();
         let mut last_logged_data: Option<UpsData> = None;
@@ -324,12 +334,23 @@ pub async fn start_background_polling(
                         let _ = tray.set_icon(Some(icon));
                     }
                 }
-                Err(_e) => {
-                    // Update frontend state ?
+                Err(e) => {
+                    warn!("UPS poll failed: {}", e);
+                    let _ = app.emit("ups-error", e);
                 }
             }
         }
     });
+
+    let previous = polling_state
+        .0
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .replace(task.abort_handle());
+    if let Some(old) = previous {
+        info!("Stopping previous polling task");
+        old.abort();
+    }
 
     Ok(())
 }
@@ -435,6 +456,7 @@ pub async fn trigger_system_stop(action_type: String, delay_sec: u64) -> Result<
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = (action_type, delay_sec);
         Err("Offline actions only supported on Windows".to_string())
     }
 }
