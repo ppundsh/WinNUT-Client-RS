@@ -34,6 +34,14 @@ export interface UpsData {
   extended_vars?: Record<string, string>;
 }
 
+/** Result of the `test_nut_connection` command ("Test & Connect"). */
+export interface ConnectionTest {
+  model: string | null;
+  status: string;
+  commands: number;
+  auth: { kind: 'none' } | { kind: 'ok' } | { kind: 'rejected'; detail: string };
+}
+
 export interface NutConfig {
   host: string;
   port: number;

@@ -85,6 +85,61 @@ pub async fn connect_nut(state: State<'_, NutState>, config: NutConfig) -> Resul
     }
 }
 
+/// Outcome of the credential check in [`test_nut_connection`].
+#[derive(serde::Serialize, Debug)]
+#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
+pub enum AuthCheck {
+    /// No user name configured: read-only monitoring, remote commands unavailable.
+    None,
+    /// The server accepted the user name / password.
+    Ok,
+    /// The server rejected them; carries the NUT error code or the failure text.
+    Rejected(String),
+}
+
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTest {
+    pub model: Option<String>,
+    pub status: String,
+    pub commands: usize,
+    pub auth: AuthCheck,
+}
+
+/// "Test & Connect": reads the UPS once on a separate connection and, if a user name is
+/// configured, checks the credentials. Monitoring works without credentials; remote commands
+/// (INSTCMD) need them.
+#[tauri::command]
+pub async fn test_nut_connection(config: NutConfig, ups_name: String) -> Result<ConnectionTest, String> {
+    let has_user = config.username.as_deref().is_some_and(|u| !u.trim().is_empty());
+    let mut client = NutClient::new(config);
+    client
+        .connect()
+        .await
+        .map_err(|e| format!("Connection failed: {e}"))?;
+    let data = client
+        .get_ups_data(&ups_name)
+        .await
+        .map_err(|e| format!("Failed to get data: {e}"))?;
+    let commands = client.list_ups_commands(&ups_name).await.map(|c| c.len()).unwrap_or(0);
+    let auth = if has_user {
+        match client.check_login(&ups_name).await {
+            Ok(None) => AuthCheck::Ok,
+            Ok(Some(code)) => AuthCheck::Rejected(code),
+            Err(e) => AuthCheck::Rejected(e.to_string()),
+        }
+    } else {
+        AuthCheck::None
+    };
+    let _ = client.disconnect().await;
+    Ok(ConnectionTest {
+        model: data.ups_model.clone().or(data.ups_mfr.clone()),
+        status: data.status,
+        commands,
+        auth,
+    })
+}
+
 #[tauri::command]
 pub async fn disconnect_nut(state: State<'_, NutState>) -> Result<String, String> {
     let mut state_val = state.0.lock().await;

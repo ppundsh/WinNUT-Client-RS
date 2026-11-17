@@ -24,6 +24,8 @@ export function DashboardView() {
   const { data, history, config, shutdownConfig, events, supportedCommands } = useUpsStore();
   const { countdown } = useShutdownMonitor();
   const tr = useT();
+  // INSTCMD needs a NUT user with instcmd rights; without one the server answers USERNAME-REQUIRED.
+  const canControl = !!config?.username?.trim();
   const cmdLabel = (c: string) => {
     const key = `cmd.${c}`;
     return hasKey(key) ? tr(key) : (c.split('.').pop()?.toUpperCase() || c);
@@ -271,6 +273,9 @@ export function DashboardView() {
               <Cpu className="h-3 w-3 text-primary/40" />
               {tr('info.remoteControl')}
             </h4>
+            {!canControl && (
+              <p className="text-[9px] text-muted-foreground leading-snug">{tr('remote.needAuth')}</p>
+            )}
             <div className="grid grid-cols-2 gap-2 pt-1">
               {supportedCommands
                 .filter(c => c.includes('beeper') || c.includes('test') || c.includes('shutdown') || c.includes('load'))
@@ -282,7 +287,8 @@ export function DashboardView() {
                 return (
                   <button
                     key={cmd}
-                    title={cmdDescription(cmd)}
+                    disabled={!canControl}
+                    title={canControl ? cmdDescription(cmd) : tr('remote.needAuth')}
                     onClick={async () => {
                       if (isDangerous) {
                         const confirmed = confirm(tr('cmd.confirmDangerous', { cmd }));
@@ -298,7 +304,7 @@ export function DashboardView() {
                         toast.error(tr('cmd.failed', { error: describeError(tr, e) }));
                       }
                     }}
-                    className={`px-2 py-1.5 rounded-md border text-[9px] font-bold transition-all text-center uppercase tracking-tighter ${isDangerous
+                    className={`px-2 py-1.5 rounded-md border text-[9px] font-bold transition-all text-center uppercase tracking-tighter disabled:opacity-40 disabled:pointer-events-none ${isDangerous
                       ? 'bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/20 shadow-sm'
                       : 'bg-zinc-900/5 dark:bg-white/5 border-border hover:bg-primary/10 hover:border-primary/40 text-foreground/70 hover:text-primary shadow-sm'
                       }`}

@@ -187,11 +187,33 @@ impl NutClient {
 
     pub async fn run_instant_cmd(&mut self, ups_name: &str, cmd: &str) -> Result<(), NutError> {
         let resp = self.send_cmd(&format!("INSTCMD {ups_name} {cmd}")).await?;
-        if resp.trim() == "OK" {
+        // NUT 2.8 may answer "OK TRACKING <id>" when command tracking is enabled.
+        if resp.trim() == "OK" || resp.starts_with("OK ") {
             Ok(())
         } else {
             Err(NutError::CommandFailed(resp))
         }
+    }
+
+    /// Verifies the USERNAME / PASSWORD given at connect time.
+    ///
+    /// upsd answers OK to USERNAME and PASSWORD without checking them; credentials are only
+    /// checked when they are used. `LOGIN <ups>` is the side-effect-free way to do that: it
+    /// succeeds for users with an `upsmon` role and is undone right away with LOGOUT (which
+    /// also closes the connection, so this must be the last call on this client).
+    ///
+    /// Returns `Ok(None)` when the server accepted the credentials, `Ok(Some(code))` with the
+    /// NUT error code (e.g. ACCESS-DENIED, PASSWORD-REQUIRED) when it did not.
+    pub async fn check_login(&mut self, ups_name: &str) -> Result<Option<String>, NutError> {
+        let resp = self.send_cmd(&format!("LOGIN {}", ups_name.trim())).await?;
+        if let Some(code) = super::parser::error_code(&resp) {
+            return Ok(Some(code));
+        }
+        if let Some(mut stream) = self.stream.take() {
+            let _ = stream.write_all(b"LOGOUT\n").await;
+            let _ = stream.shutdown().await;
+        }
+        Ok(None)
     }
 }
 

@@ -16,11 +16,14 @@ import { getVersion } from '@tauri-apps/api/app';
 import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 import { useT, describeError, LANGUAGES, type LangSetting } from '@/i18n';
 import { Languages } from 'lucide-react';
+import type { ConnectionTest } from '../../types/ups';
 
 export function SettingsModal() {
   const { config, setConfig, setConnected, ratedPower, setRatedPower, fullLoadRuntime, setFullLoadRuntime, shutdownConfig, setShutdownConfig, setSupportedCommands, theme, setTheme, language, setLanguage, setError } = useUpsStore();
   const tr = useT();
   const [open, setOpen] = useState(false);
+  // Inline result of the last "Test & Connect" (cleared when the credentials change).
+  const [testResult, setTestResult] = useState<{ tone: 'ok' | 'info' | 'warn'; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'general' | 'connection' | 'shutdown' | 'update' | 'appearance' | 'data'>('general');
   const [appVersion, setAppVersion] = useState("...");
 
@@ -172,10 +175,27 @@ export function SettingsModal() {
         ups_name: upsName.trim()
       };
 
+      // Separate test connection: reads the UPS once (wrong UPS name / ACL / stale driver
+      // are reported here) and, if a user name is set, verifies the credentials with LOGIN.
+      // Monitoring works without credentials; remote commands need them.
+      const result = await invoke<ConnectionTest>("test_nut_connection", { config: newConfig, upsName: newConfig.ups_name });
+      const params = { ups: newConfig.ups_name, model: result.model ?? '—', count: result.commands };
+      const outcome =
+        result.auth.kind === 'ok'
+          ? { tone: 'ok' as const, text: tr('test.authOk', params) }
+          : result.auth.kind === 'none'
+            ? { tone: 'info' as const, text: tr('test.readOnly', params) }
+            : {
+                tone: 'warn' as const,
+                text: tr('test.authRejected', {
+                  ...params,
+                  // At LOGIN, ACCESS-DENIED means wrong user / password (or a user without rights).
+                  reason: result.auth.detail === 'ACCESS-DENIED' ? tr('test.badCredentials') : describeError(tr, result.auth.detail),
+                }),
+              };
+      setTestResult(outcome);
+
       await invoke("connect_nut", { config: newConfig });
-      // A TCP connection alone proves nothing: read the UPS once so a wrong UPS name,
-      // ACL or stale driver is reported here instead of failing silently later.
-      await invoke("get_ups_data", { upsName: newConfig.ups_name });
       setConfig(newConfig);
       setConnected(true);
       setError(null);
@@ -199,10 +219,17 @@ export function SettingsModal() {
         }
       });
 
-      toast.success(tr('settings.connected', { ups: newConfig.ups_name }));
-      setOpen(false);
+      if (outcome.tone === 'warn') {
+        // Monitoring is running, but keep the dialog open so the credentials can be fixed.
+        toast.warning(outcome.text);
+      } else {
+        toast.success(outcome.text);
+        setOpen(false);
+      }
     } catch (e) {
-      toast.error(describeError(tr, e));
+      const text = describeError(tr, e);
+      setTestResult({ tone: 'warn', text });
+      toast.error(text);
     }
   };
 
@@ -543,14 +570,28 @@ export function SettingsModal() {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="username" className="text-right text-[11px] font-bold text-muted-foreground uppercase">{tr('conn.user')}</Label>
-                  <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={tr('conn.userPlaceholder')} className="col-span-3 h-8 text-[11px] bg-muted/20 border-border/50 focus:bg-background transition-all" />
+                  <Input id="username" value={username} onChange={(e) => { setUsername(e.target.value); setTestResult(null); }} placeholder={tr('conn.userPlaceholder')} className="col-span-3 h-8 text-[11px] bg-muted/20 border-border/50 focus:bg-background transition-all" />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="password" className="text-right text-[11px] font-bold text-muted-foreground uppercase">{tr('conn.pass')}</Label>
-                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="col-span-3 h-8 text-[11px] bg-muted/20 border-border/50 focus:bg-background transition-all" />
+                  <Input id="password" type="password" value={password} onChange={(e) => { setPassword(e.target.value); setTestResult(null); }} placeholder="••••••••" className="col-span-3 h-8 text-[11px] bg-muted/20 border-border/50 focus:bg-background transition-all" />
                 </div>
                 <div className="grid grid-cols-4 gap-4 -mt-3">
                   <p className="col-start-2 col-span-3 text-[9px] text-muted-foreground leading-snug">{tr('conn.authHint')}</p>
+                  {testResult && (
+                    <p
+                      role="status"
+                      className={`col-start-2 col-span-3 text-[10px] font-medium leading-snug rounded border px-2 py-1.5 ${
+                        testResult.tone === 'ok'
+                          ? 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400'
+                          : testResult.tone === 'info'
+                            ? 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                            : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                      }`}
+                    >
+                      {testResult.text}
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="rated" className="text-right text-[11px] font-bold text-muted-foreground uppercase">{tr('conn.ratedPower')}</Label>
