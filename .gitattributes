@@ -1,0 +1,6 @@
+# Windows scripts keep CRLF line endings in the working tree.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+# Git hooks run under sh and must keep LF.
+.githooks/* text eol=lf

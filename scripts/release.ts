@@ -109,7 +109,9 @@ try {
     run(`git commit -m "chore: release ${tagName}"`, true); // Ignore if empty commit fails (unlikely due to add)
   }
 
-  run(`git tag ${tagName}`);
+  // Annotated tag: signed automatically when tag.gpgSign is enabled (scripts/setup-yubikey.ps1),
+  // which the pre-push hook requires. Lightweight tags cannot carry a signature.
+  run(`git tag -a ${tagName} -m "Release ${tagName}"`);
 
   console.log('⬆️  Pushing to GitHub...');
   run('git push'); // Push commits
@@ -121,7 +123,7 @@ try {
   }
 
   console.log(`\n✨ Release ${tagName} triggered successfully! 🚀`);
-  console.log('👉 Check progress at: https://github.com/tatsuyakari1203/WinNUT-Rust-Client/actions');
+  console.log('👉 Check progress at: https://github.com/ppundsh/WinNUT-Client-RS/actions');
 
 } catch (error) {
   console.error('\n❌ Release failed.');
