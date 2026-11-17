@@ -34,6 +34,13 @@ export interface UpsData {
   extended_vars?: Record<string, string>;
 }
 
+/** Result of the `get_power_capabilities` command. */
+export interface PowerCapabilities {
+  sleep: boolean;
+  hibernate: boolean;
+  modernStandby: boolean;
+}
+
 /** Result of the `test_nut_connection` command ("Test & Connect"). */
 export interface ConnectionTest {
   model: string | null;
@@ -96,6 +103,9 @@ export interface UpsState {
   supportedCommands: string[]; // List of commands the UPS supports
   theme: 'system' | 'light' | 'dark' | 'catppuccin' | 'dracula' | 'nord' | 'monokai' | 'github-dark';
   language: LangSetting;
+  /** Show metric cards the UPS does not report (as "--") instead of replacing them. */
+  showEmptyMetrics: boolean;
+  setShowEmptyMetrics: (show: boolean) => void;
   setLanguage: (language: LangSetting) => void;
   setUpsData: (data: UpsData) => void;
   setError: (error: string | null) => void;

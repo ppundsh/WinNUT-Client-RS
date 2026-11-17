@@ -16,10 +16,10 @@ import { getVersion } from '@tauri-apps/api/app';
 import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 import { useT, describeError, LANGUAGES, type LangSetting } from '@/i18n';
 import { Languages } from 'lucide-react';
-import type { ConnectionTest } from '../../types/ups';
+import type { ConnectionTest, PowerCapabilities } from '../../types/ups';
 
 export function SettingsModal() {
-  const { config, setConfig, setConnected, ratedPower, setRatedPower, fullLoadRuntime, setFullLoadRuntime, shutdownConfig, setShutdownConfig, setSupportedCommands, theme, setTheme, language, setLanguage, setError } = useUpsStore();
+  const { config, setConfig, setConnected, ratedPower, setRatedPower, fullLoadRuntime, setFullLoadRuntime, shutdownConfig, setShutdownConfig, setSupportedCommands, theme, setTheme, language, setLanguage, setError, showEmptyMetrics, setShowEmptyMetrics } = useUpsStore();
   const tr = useT();
   const [open, setOpen] = useState(false);
   // Inline result of the last "Test & Connect" (cleared when the credentials change).
@@ -38,12 +38,20 @@ export function SettingsModal() {
     isEnabled().then(setAutostartProxy).catch(console.error);
   }, []);
 
-  // Sync autostart status when modal opens
+  // Sleep / hibernate availability of this PC (re-checked whenever the dialog opens,
+  // e.g. after `powercfg /hibernate on`). null = unknown (not on Windows / not loaded yet).
+  const [powerCaps, setPowerCaps] = useState<PowerCapabilities | null>(null);
+
+  // Sync autostart status and power capabilities when modal opens
   useEffect(() => {
     if (open) {
       isEnabled().then(setAutostartProxy).catch(console.error);
+      invoke<PowerCapabilities>('get_power_capabilities').then(setPowerCaps).catch(() => setPowerCaps(null));
     }
   }, [open]);
+
+  const actionAvailable = (action: ShutdownType) =>
+    action === 'Shutdown' || powerCaps === null ? true : action === 'Hibernate' ? powerCaps.hibernate : powerCaps.sleep;
 
   const toggleAutostart = async (checked: boolean) => {
     // Optimistic update
@@ -85,6 +93,8 @@ export function SettingsModal() {
   const [batteryThreshold, setBatteryThreshold] = useState(shutdownConfig.batteryThreshold.toString());
   const [runtimeThreshold, setRuntimeThreshold] = useState(shutdownConfig.runtimeThreshold.toString());
   const [stopType, setStopType] = useState<ShutdownType>(shutdownConfig.stopType);
+  // What "Test" (and a real trigger) will actually do: unavailable suspend states fall back to Shutdown.
+  const testAction: ShutdownType = actionAvailable(stopType) ? stopType : 'Shutdown';
   const [delaySeconds, setDelaySeconds] = useState(shutdownConfig.delaySeconds.toString());
 
   // Test Countdown State
@@ -104,13 +114,13 @@ export function SettingsModal() {
     let timer: number | null = null;
 
     // For non-Shutdown types (Hibernate/Sleep) or if we want manual countdown
-    if (stopType !== 'Shutdown' && testCountdown !== null && testCountdown > 0) {
+    if (testAction !== 'Shutdown' && testCountdown !== null && testCountdown > 0) {
       timer = window.setInterval(() => {
         setTestCountdown(prev => (prev !== null ? prev - 1 : null));
       }, 1000);
-    } else if (testCountdown === 0 && stopType !== 'Shutdown') {
+    } else if (testCountdown === 0 && testAction !== 'Shutdown') {
       // Hibernate/Sleep trigger at 0
-      invoke('trigger_system_stop', { actionType: stopType, delaySec: 0 })
+      invoke('trigger_system_stop', { actionType: testAction, delaySec: 0 })
         .catch(err => toast.error(tr('sd.error', { error: String(err) })));
       setTestCountdown(null);
     }
@@ -118,11 +128,11 @@ export function SettingsModal() {
     return () => {
       if (timer) window.clearInterval(timer);
     };
-  }, [testCountdown, stopType]);
+  }, [testCountdown, testAction]);
 
   // Handle Shutdown Test Start (Native Timer)
   useEffect(() => {
-    if (testCountdown === 15 && stopType === 'Shutdown') {
+    if (testCountdown === 15 && testAction === 'Shutdown') {
       // Trigger native Windows shutdown with 15s delay immediately
       invoke('trigger_system_stop', { actionType: 'Shutdown', delaySec: 15 })
         .then(() => toast.success(tr('sd.scheduled')))
@@ -139,7 +149,7 @@ export function SettingsModal() {
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [testCountdown, stopType]);
+  }, [testCountdown, testAction]);
 
   const handleSave = async () => {
     const newConfig = {
@@ -388,6 +398,20 @@ export function SettingsModal() {
               </div>
             ) : activeTab === 'appearance' ? (
               <div className="space-y-6">
+                <div className="flex items-center justify-between gap-4 p-3 border border-border rounded-lg bg-muted/5">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-bold uppercase tracking-wider">{tr('settings.showEmpty')}</Label>
+                    <p className="text-[10px] text-muted-foreground leading-snug">{tr('settings.showEmpty.desc')}</p>
+                  </div>
+                  <div
+                    role="switch"
+                    aria-checked={showEmptyMetrics}
+                    onClick={() => setShowEmptyMetrics(!showEmptyMetrics)}
+                    className={`shrink-0 w-9 h-5 rounded-full cursor-pointer transition-colors relative ${showEmptyMetrics ? 'bg-primary' : 'bg-muted dark:bg-zinc-700'}`}
+                  >
+                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${showEmptyMetrics ? 'translate-x-full border-white' : ''}`} />
+                  </div>
+                </div>
                 <div className="grid gap-4">
                   <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase text-muted-foreground">{tr('settings.theme')}</Label>
@@ -675,11 +699,31 @@ export function SettingsModal() {
                     onChange={(e) => setStopType(e.target.value as ShutdownType)}
                     className="col-span-3 h-8 bg-muted/20 border border-border/50 rounded-md px-2 text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-primary"
                   >
-                    <option value="Shutdown">{tr('stopType.Shutdown')}</option>
-                    <option value="Hibernate">{tr('stopType.Hibernate')}</option>
-                    <option value="Sleep">{tr('stopType.Sleep')}</option>
+                    {(['Shutdown', 'Hibernate', 'Sleep'] as ShutdownType[]).map((action) => (
+                      <option key={action} value={action} disabled={!actionAvailable(action) && stopType !== action}>
+                        {actionAvailable(action) ? tr(`stopType.${action}`) : tr('sd.unavailable', { action: tr(`stopType.${action}`) })}
+                      </option>
+                    ))}
                   </select>
                 </div>
+                {(() => {
+                  const notes: { tone: 'warn' | 'info'; text: string }[] = [];
+                  if (!actionAvailable(stopType)) notes.push({ tone: 'warn', text: tr('sd.fallback') });
+                  if (powerCaps && !powerCaps.hibernate) notes.push({ tone: 'info', text: tr('sd.hibernateOff') });
+                  if (powerCaps && !powerCaps.sleep && powerCaps.modernStandby) notes.push({ tone: 'info', text: tr('sd.noSleep') });
+                  if (stopType === 'Sleep' && actionAvailable('Sleep')) notes.push({ tone: 'warn', text: tr('sd.sleepRisk') });
+                  return notes.length === 0 ? null : (
+                    <div className="grid grid-cols-4 gap-4 -mt-2">
+                      <div className="col-start-2 col-span-3 space-y-1">
+                        {notes.map((n) => (
+                          <p key={n.text} className={`text-[9px] leading-snug ${n.tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                            {n.text}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right text-[10px] font-bold text-muted-foreground leading-tight uppercase">{tr('sd.delay')}</Label>
@@ -696,7 +740,7 @@ export function SettingsModal() {
                       size="sm"
                       className="w-full h-8 text-[10px] font-bold uppercase tracking-widest bg-destructive/80 hover:bg-destructive shadow-lg shadow-destructive/20"
                       onClick={() => {
-                        toast(tr('sd.testPrompt', { action: tr(`stopType.${stopType}`) }), {
+                        toast(tr('sd.testPrompt', { action: tr(`stopType.${testAction}`) }), {
                           description: tr('sd.testPromptDesc'),
                           action: {
                             label: tr('sd.proceed'),
@@ -710,7 +754,7 @@ export function SettingsModal() {
                         });
                       }}
                     >
-                      {tr('sd.testNow', { action: tr(`stopType.${stopType}`) })}
+                      {tr('sd.testNow', { action: tr(`stopType.${testAction}`) })}
                     </Button>
                   ) : (
                     <Button

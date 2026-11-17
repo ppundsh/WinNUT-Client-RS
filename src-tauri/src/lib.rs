@@ -109,7 +109,8 @@ pub fn run() {
             commands::get_history_stats,
             commands::clean_history_data,
             commands::set_tray_labels,
-            commands::test_nut_connection
+            commands::test_nut_connection,
+            commands::get_power_capabilities
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

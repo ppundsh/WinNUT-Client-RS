@@ -1,8 +1,5 @@
 import {
   Activity,
-  Server,
-  Plug,
-  Waves,
   Cpu,
   History as HistoryIcon,
   Sliders,
@@ -11,6 +8,7 @@ import {
   Database,
 } from 'lucide-react';
 import { StatusCard } from './StatusCard';
+import { buildMetrics } from './metrics';
 import { LoadChart } from './LoadChart';
 import { BatteryGauge } from './BatteryGauge';
 import { PowerStatus } from './PowerStatus';
@@ -21,9 +19,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { useT, hasKey, describeError } from '@/i18n';
 
 export function DashboardView() {
-  const { data, history, config, shutdownConfig, events, supportedCommands } = useUpsStore();
+  const { data, history, config, shutdownConfig, events, supportedCommands, showEmptyMetrics } = useUpsStore();
   const { countdown } = useShutdownMonitor();
   const tr = useT();
+  const metrics = buildMetrics(data, tr, showEmptyMetrics);
   // INSTCMD needs a NUT user with instcmd rights; without one the server answers USERNAME-REQUIRED.
   const canControl = !!config?.username?.trim();
   const cmdLabel = (c: string) => {
@@ -80,33 +79,17 @@ export function DashboardView() {
       {/* CENTER: Real-time Stats & Chart (50%) */}
       <section className="flex-1 p-4 flex flex-col gap-6 h-full min-w-0">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-8 shrink-0">
-          <StatusCard
-            title={tr('metric.inputVolt')}
-            value={data?.input_voltage}
-            unit="V"
-            icon={Plug}
-          />
-          <StatusCard
-            title={tr('metric.outputVolt')}
-            value={data?.output_voltage}
-            unit="V"
-            icon={Waves}
-          />
-          <StatusCard title={tr('metric.load')} value={data?.ups_load} unit="%" icon={Cpu} />
-
-          <StatusCard
-            title={tr('metric.inputFreq')}
-            value={data?.input_frequency}
-            unit="Hz"
-            icon={Activity}
-          />
-          <StatusCard
-            title={tr('metric.outputFreq')}
-            value={data?.output_frequency}
-            unit="Hz"
-            icon={Activity}
-          />
-          <StatusCard title={tr('metric.power')} value={data?.power_watts ? Math.round(data.power_watts) : "--"} unit="W" icon={Server} />
+          {metrics.map((m) => (
+            <StatusCard
+              key={m.id}
+              title={m.title}
+              value={m.value}
+              unit={m.unit}
+              icon={m.icon}
+              subValue={m.subValue}
+              tooltip={m.tooltip}
+            />
+          ))}
         </div>
 
         <div className="flex-1 flex flex-col min-h-0 bg-muted/5 rounded-lg p-2 border border-border/5">

@@ -473,62 +473,99 @@ fn acquire_shutdown_privilege() -> Result<(), String> {
     Ok(())
 }
 
+/// Which stop actions this PC supports (Settings › Shutdown only offers these).
+#[derive(serde::Serialize, Debug, Clone, Copy, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PowerCapabilities {
+    /// S1–S3 sleep is available (SetSuspendState can put the PC to sleep).
+    pub sleep: bool,
+    /// S4 is supported and hibernation is enabled (hiberfil.sys exists).
+    pub hibernate: bool,
+    /// Modern Standby (S0 low-power idle) PC; these usually have no S3 sleep.
+    pub modern_standby: bool,
+}
+
+#[tauri::command]
+pub fn get_power_capabilities() -> PowerCapabilities {
+    power_capabilities()
+}
+
+#[cfg(target_os = "windows")]
+fn power_capabilities() -> PowerCapabilities {
+    use windows::Win32::System::Power::{GetPwrCapabilities, SYSTEM_POWER_CAPABILITIES};
+    let mut caps = SYSTEM_POWER_CAPABILITIES::default();
+    if !unsafe { GetPwrCapabilities(&mut caps) }.as_bool() {
+        return PowerCapabilities::default();
+    }
+    PowerCapabilities {
+        sleep: caps.SystemS1.as_bool() || caps.SystemS2.as_bool() || caps.SystemS3.as_bool(),
+        hibernate: caps.SystemS4.as_bool() && caps.HiberFilePresent.as_bool(),
+        modern_standby: caps.AoAc.as_bool(),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn power_capabilities() -> PowerCapabilities {
+    PowerCapabilities::default()
+}
+
+#[cfg(target_os = "windows")]
+fn initiate_shutdown(delay_sec: u64) -> Result<(), String> {
+    use windows::core::{HSTRING, PCWSTR};
+    use windows::Win32::Foundation::{FALSE, TRUE};
+    use windows::Win32::System::Shutdown::{
+        InitiateSystemShutdownExW, SHTDN_REASON_FLAG_PLANNED, SHTDN_REASON_MAJOR_OTHER,
+        SHTDN_REASON_MINOR_OTHER,
+    };
+    let msg = HSTRING::from("UPS Shutdown Triggered");
+    let reason = SHTDN_REASON_MAJOR_OTHER | SHTDN_REASON_MINOR_OTHER | SHTDN_REASON_FLAG_PLANNED;
+    // InitiateSystemShutdownExW(machine, message, timeout, force_apps, reboot, reason)
+    unsafe {
+        InitiateSystemShutdownExW(
+            None,
+            PCWSTR::from_raw(msg.as_ptr()),
+            delay_sec.min(u32::MAX as u64) as u32,
+            TRUE,  // Force apps closed
+            FALSE, // Shutdown, not reboot
+            reason,
+        )
+    }
+    .map_err(|e| format!("Failed to initiate system shutdown: {e}"))
+}
+
 #[tauri::command]
 pub async fn trigger_system_stop(action_type: String, delay_sec: u64) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use windows::core::{HSTRING, PCWSTR};
-        use windows::Win32::Foundation::{BOOLEAN, FALSE, TRUE};
+        use windows::Win32::Foundation::BOOLEAN;
         use windows::Win32::System::Power::SetSuspendState;
-        use windows::Win32::System::Shutdown::{
-            InitiateSystemShutdownExW, SHTDN_REASON_FLAG_PLANNED, SHTDN_REASON_MAJOR_OTHER,
-            SHTDN_REASON_MINOR_OTHER,
+
+        if let Err(e) = acquire_shutdown_privilege() {
+            warn!("Could not acquire shutdown privilege: {}", e);
+        }
+
+        let hibernate = match action_type.as_str() {
+            "Shutdown" => return initiate_shutdown(delay_sec),
+            "Hibernate" => true,
+            "Sleep" => false,
+            other => return Err(format!("Invalid action type: {other}")),
         };
 
-        // Try to acquire permissions first
-        if let Err(e) = acquire_shutdown_privilege() {
-            eprintln!("Warning: Could not acquire shutdown privilege: {}", e);
+        // A UPS is about to run out: if the chosen suspend state is not available (disabled
+        // hibernation, Modern Standby PC without S3) or fails, shut down instead of doing
+        // nothing.
+        let caps = power_capabilities();
+        let available = if hibernate { caps.hibernate } else { caps.sleep };
+        if available {
+            // SetSuspendState takes BOOLEAN (u8): hibernate, force (ignored), disable wake events.
+            if unsafe { SetSuspendState(BOOLEAN(hibernate as u8), BOOLEAN(0), BOOLEAN(0)) }.as_bool() {
+                return Ok(());
+            }
+            error!("{action_type} failed; falling back to shutdown");
+        } else {
+            warn!("{action_type} is not available on this PC; falling back to shutdown");
         }
-
-        match action_type.as_str() {
-            "Shutdown" => unsafe {
-                let msg = HSTRING::from("UPS Shutdown Triggered");
-                let reason =
-                    SHTDN_REASON_MAJOR_OTHER | SHTDN_REASON_MINOR_OTHER | SHTDN_REASON_FLAG_PLANNED;
-
-                // InitiateSystemShutdownExW(machine, message, timeout, force_apps, reboot, reason)
-                if InitiateSystemShutdownExW(
-                    None,
-                    PCWSTR::from_raw(msg.as_ptr()),
-                    delay_sec as u32,
-                    TRUE,  // Force apps closed
-                    FALSE, // Reboot? No, Shutdown
-                    reason,
-                )
-                .is_err()
-                {
-                    return Err("Failed to initiate system shutdown".to_string());
-                }
-                Ok(())
-            },
-            "Hibernate" => unsafe {
-                // SetSuspendState uses BOOLEAN (u8), not BOOL (i32). TRUE/FALSE are BOOL.
-                if SetSuspendState(BOOLEAN(1), BOOLEAN(0), BOOLEAN(0)).as_bool() {
-                    Ok(())
-                } else {
-                    Err("Failed to trigger Hibernate".to_string())
-                }
-            },
-            "Sleep" => unsafe {
-                // Hibernate = FALSE means Sleep
-                if SetSuspendState(BOOLEAN(0), BOOLEAN(0), BOOLEAN(0)).as_bool() {
-                    Ok(())
-                } else {
-                    Err("Failed to trigger Sleep".to_string())
-                }
-            },
-            _ => Err("Invalid action type".to_string()),
-        }
+        initiate_shutdown(delay_sec)
     }
 
     #[cfg(not(target_os = "windows"))]

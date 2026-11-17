@@ -24,6 +24,7 @@ export const useUpsStore = create<UpsState>()(
       supportedCommands: [],
       theme: 'system',
       language: 'system',
+      showEmptyMetrics: false,
 
       events: [],
 
@@ -94,6 +95,7 @@ export const useUpsStore = create<UpsState>()(
       setSupportedCommands: (supportedCommands) => set({ supportedCommands }),
       setTheme: (theme) => set({ theme }),
       setLanguage: (language) => set({ language }),
+      setShowEmptyMetrics: (showEmptyMetrics) => set({ showEmptyMetrics }),
       clearEvents: () => set({ events: [] }),
     }),
     {
@@ -106,6 +108,7 @@ export const useUpsStore = create<UpsState>()(
         events: state.events,
         theme: state.theme,
         language: state.language,
+        showEmptyMetrics: state.showEmptyMetrics,
       }),
     }
   )
