@@ -383,15 +383,18 @@ export function SettingsModal() {
                     )}
                   </div>
                   <div className="flex items-center">
-                    <div
+                    <button
+                      type="button"
                       role="switch"
                       aria-checked={autostartOn}
                       aria-busy={autostartBusy}
+                      aria-label={tr('settings.autostart')}
+                      disabled={autostartBusy}
                       onClick={() => toggleAutostart(!autostartOn)}
-                      className={`shrink-0 w-9 h-5 rounded-full cursor-pointer transition-colors relative ${autostartOn ? 'bg-primary' : 'bg-muted dark:bg-zinc-700'} ${autostartBusy ? 'opacity-50 pointer-events-none' : ''}`}
+                      className={`shrink-0 w-9 h-5 rounded-full cursor-pointer transition-colors relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 ${autostartOn ? 'bg-primary' : 'bg-muted dark:bg-zinc-700'}`}
                     >
-                      <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${autostartOn ? 'translate-x-full border-white' : ''}`} />
-                    </div>
+                      <span className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${autostartOn ? 'translate-x-full border-white' : ''}`} />
+                    </button>
                   </div>
                 </div>
 
@@ -423,14 +426,16 @@ export function SettingsModal() {
                     <Label className="text-[11px] font-bold uppercase tracking-wider">{tr('settings.showEmpty')}</Label>
                     <p className="text-[10px] text-muted-foreground leading-snug">{tr('settings.showEmpty.desc')}</p>
                   </div>
-                  <div
+                  <button
+                    type="button"
                     role="switch"
                     aria-checked={showEmptyMetrics}
+                    aria-label={tr('settings.showEmpty')}
                     onClick={() => setShowEmptyMetrics(!showEmptyMetrics)}
-                    className={`shrink-0 w-9 h-5 rounded-full cursor-pointer transition-colors relative ${showEmptyMetrics ? 'bg-primary' : 'bg-muted dark:bg-zinc-700'}`}
+                    className={`shrink-0 w-9 h-5 rounded-full cursor-pointer transition-colors relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${showEmptyMetrics ? 'bg-primary' : 'bg-muted dark:bg-zinc-700'}`}
                   >
-                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${showEmptyMetrics ? 'translate-x-full border-white' : ''}`} />
-                  </div>
+                    <span className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${showEmptyMetrics ? 'translate-x-full border-white' : ''}`} />
+                  </button>
                 </div>
                 <div className="grid gap-4">
                   <div className="space-y-2">

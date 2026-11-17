@@ -21,10 +21,15 @@ export function Header({ view, setView }: HeaderProps) {
     return hasKey(key) ? tr(key) : flag;
   };
 
-  const handleDrag = (e: React.MouseEvent) => {
-    if (e.button === 0 && !(e.target as HTMLElement).closest('button, input, .no-drag')) {
-      getCurrentWindow().startDragging();
-    }
+  const handleDrag = (e: React.MouseEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement;
+    // React bubbles events from portals through the component tree: the Settings dialog is
+    // rendered inside <header>, so its clicks arrive here too. Only start a window drag for
+    // presses on the header itself, otherwise Windows captures the mouse and the click on
+    // the dialog's control is lost.
+    if (e.button !== 0 || !e.currentTarget.contains(target)) return;
+    if (target.closest('button, input, select, textarea, a, label, [role="switch"], .no-drag')) return;
+    getCurrentWindow().startDragging();
   };
 
   const appWindow = getCurrentWindow();
