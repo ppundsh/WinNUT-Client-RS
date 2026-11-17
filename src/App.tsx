@@ -9,11 +9,14 @@ import { useUpsData } from './hooks/useUpsData';
 import { useNotifications } from './hooks/useNotifications';
 import { Toaster, toast } from 'sonner';
 import { AlertTriangle } from 'lucide-react';
+import { useT, useLang } from './i18n';
 
 export default function App() {
   useUpsData();
   useNotifications();
-  const { config, setConnected, setSupportedCommands, shutdownConfig } = useUpsStore();
+  const { config, setConnected, setSupportedCommands, shutdownConfig, setError } = useUpsStore();
+  const tr = useT();
+  const lang = useLang();
   const { countdown } = useShutdownMonitor();
   const [view, setView] = useState<'dashboard' | 'history'>('dashboard');
 
@@ -51,7 +54,9 @@ export default function App() {
           setConnected(true);
         } catch (err) {
           console.error("Auto-connect failed:", err);
-          // Don't toast here to avoid spam on startup
+          // Don't toast here to avoid spam on startup; the header shows the error instead.
+          setConnected(false);
+          setError(String(err));
         }
       }
     };
@@ -66,6 +71,16 @@ export default function App() {
       // We usually don't want to disconnect on hot reload, but for production it's fine.
     };
   }, [config, shutdownConfig]); // Dependencies
+
+  // Language: <html lang>, and the native tray menu (rendered by the Rust side).
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    invoke('set_tray_labels', {
+      show: tr('tray.show'),
+      hide: tr('tray.hide'),
+      quit: tr('tray.quit'),
+    }).catch((e) => console.warn('Tray labels not updated:', e));
+  }, [lang, tr]);
 
   // Theme Management
   const { theme } = useUpsStore();
@@ -116,8 +131,8 @@ export default function App() {
               <AlertTriangle className="h-12 w-12 text-white" />
             </div>
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-black uppercase tracking-tighter">System Shutdown Imminent</h2>
-              <p className="text-sm font-medium opacity-90">UPS battery is critical. Closing applications...</p>
+              <h2 className="text-2xl font-black uppercase tracking-tighter">{tr('shutdown.imminentTitle')}</h2>
+              <p className="text-sm font-medium opacity-90">{tr('shutdown.imminentBody')}</p>
             </div>
             <div className="text-7xl font-black font-mono tracking-tighter bg-white/10 px-8 py-4 rounded-lg">
               {countdown}
@@ -125,12 +140,12 @@ export default function App() {
             <button
               onClick={() => {
                 invoke('abort_system_stop')
-                  .then(() => toast.info("Shutdown aborted"))
-                  .catch(e => toast.error(`Failed to abort: ${e}`));
+                  .then(() => toast.info(tr('shutdown.aborted')))
+                  .catch(e => toast.error(tr('shutdown.abortFailed', { error: String(e) })));
               }}
               className="px-4 py-2 bg-white text-destructive font-bold rounded hover:bg-white/90 transition-colors uppercase tracking-widest text-xs"
             >
-              Cancel Shutdown
+              {tr('shutdown.cancel')}
             </button>
           </div>
         </div>

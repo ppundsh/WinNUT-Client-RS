@@ -1,5 +1,6 @@
 import { Progress } from "@/components/ui/progress";
 import { Battery, BatteryCharging, BatteryWarning } from "lucide-react";
+import { useT } from "@/i18n";
 
 interface BatteryGaugeProps {
   percentage: number | undefined;
@@ -9,6 +10,7 @@ interface BatteryGaugeProps {
 }
 
 export function BatteryGauge({ percentage = 0, status, voltage, runtime }: BatteryGaugeProps) {
+  const tr = useT();
   const isCharging = status.includes("OL") && percentage < 100;
   const isOnBattery = status.includes("OB");
 
@@ -47,7 +49,7 @@ export function BatteryGauge({ percentage = 0, status, voltage, runtime }: Batte
           {percentage}%
         </div>
         <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-          Charge
+          {tr("battery.charge")}
         </div>
       </div>
 
@@ -55,14 +57,14 @@ export function BatteryGauge({ percentage = 0, status, voltage, runtime }: Batte
 
       <div className="w-full grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
         <div className="flex flex-col">
-          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Voltage</span>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{tr("battery.voltage")}</span>
           <div className="flex items-baseline gap-1">
             <span className="text-sm font-bold text-foreground">{voltage || "--"}</span>
             <span className="text-[10px] text-muted-foreground">V</span>
           </div>
         </div>
         <div className="flex flex-col border-l border-border/50 pl-4">
-          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Remaining</span>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{tr("battery.remaining")}</span>
           <div className="flex items-baseline gap-1">
             <span className="text-sm font-bold text-foreground font-mono tracking-tight">{formatRuntime(runtime)}</span>
           </div>

@@ -1,6 +1,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getVersion } from '@tauri-apps/api/app';
-import { Zap, Minus, X } from 'lucide-react';
+import { Zap, Minus, X, AlertCircle } from 'lucide-react';
+import { useT, hasKey, describeError } from '../../i18n';
 import { SettingsModal } from '../settings/SettingsModal';
 import { useUpsStore } from '../../store/upsStore';
 import { useEffect, useState } from 'react';
@@ -11,8 +12,14 @@ export interface HeaderProps {
 }
 
 export function Header({ view, setView }: HeaderProps) {
-  const { data } = useUpsStore();
+  const { data, error } = useUpsStore();
+  const tr = useT();
   const status = data?.status || "UNKNOWN";
+  const errorText = error ? describeError(tr, error) : null;
+  const statusTitle = (flag: string) => {
+    const key = `status.${flag}`;
+    return hasKey(key) ? tr(key) : flag;
+  };
 
   const handleDrag = (e: React.MouseEvent) => {
     if (e.button === 0 && !(e.target as HTMLElement).closest('button, input, .no-drag')) {
@@ -52,11 +59,20 @@ export function Header({ view, setView }: HeaderProps) {
                 'BOOST': 'bg-purple-500/20 text-purple-500 border-purple-500/30',
               };
               return (
-                <span key={s} className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${colorMap[s] || 'bg-muted/50 text-muted-foreground border-border'} uppercase tracking-tighter`}>
+                <span key={s} title={statusTitle(s)} className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${colorMap[s] || 'bg-muted/50 text-muted-foreground border-border'} uppercase tracking-tighter`}>
                   {s}
                 </span>
               );
             })
+          )}
+          {errorText && (
+            <span
+              title={`${errorText}\n\n${error}`}
+              className="pointer-events-auto flex items-center gap-1 max-w-[260px] text-[9px] font-bold px-1.5 py-0.5 rounded border bg-red-500/15 text-red-500 border-red-500/30"
+            >
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              <span className="truncate">{errorText}</span>
+            </span>
           )}
         </div>
       </div>
@@ -67,13 +83,13 @@ export function Header({ view, setView }: HeaderProps) {
           onClick={() => setView('dashboard')}
           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${view === 'dashboard' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          Dashboard
+          {tr('header.dashboard')}
         </button>
         <button
           onClick={() => setView('history')}
           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${view === 'history' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          History
+          {tr('header.history')}
         </button>
       </div>
 
@@ -88,14 +104,14 @@ export function Header({ view, setView }: HeaderProps) {
           <button
             onClick={() => appWindow.minimize()}
             className="p-1.5 hover:bg-muted rounded transition-colors"
-            title="Minimize"
+            title={tr('header.minimize')}
           >
             <Minus className="h-3 w-3 text-muted-foreground" />
           </button>
           <button
             onClick={() => appWindow.hide()}
             className="p-1.5 hover:bg-muted rounded transition-colors group"
-            title="Hide to Tray"
+            title={tr('header.hideToTray')}
           >
             <X className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
           </button>

@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "bun run scripts/check-i18n.ts && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "release": "bun run scripts/release.ts"
+    "release": "bun run scripts/release.ts",
+    "check:i18n": "bun run scripts/check-i18n.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

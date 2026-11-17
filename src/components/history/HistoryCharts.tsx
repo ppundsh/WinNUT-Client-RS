@@ -11,6 +11,7 @@ import {
   Brush,
 } from "recharts";
 import { HistoryStats } from "../../types/ups";
+import { useT, useLang } from "@/i18n";
 
 import { RefreshCw, Activity, Zap, TrendingUp, AlertTriangle, Battery } from "lucide-react";
 
@@ -28,6 +29,8 @@ export function HistoryCharts() {
   const [stats, setStats] = useState<HistoryStats | null>(null);
   const [range, setRange] = useState<string>("24h");
   const [loading, setLoading] = useState(false);
+  const tr = useT();
+  const lang = useLang();
 
   const fetchData = async () => {
     setLoading(true);
@@ -38,7 +41,7 @@ export function HistoryCharts() {
       // Convert timestamp to readable time string for chart
       const formatted = result.map((item) => ({
         ...item,
-        timeStr: new Date(item.timestamp * 1000).toLocaleTimeString([], {
+        timeStr: new Date(item.timestamp * 1000).toLocaleTimeString(lang, {
           hour: "2-digit",
           minute: "2-digit",
         }),
@@ -58,16 +61,16 @@ export function HistoryCharts() {
 
   useEffect(() => {
     fetchData();
-  }, [range]);
+  }, [range, lang]);
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
       {/* Header Controls */}
       <div className="flex items-center justify-between shrink-0 mb-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-xs font-bold tracking-[0.2em] text-muted-foreground uppercase">Historical Data</h2>
+          <h2 className="text-xs font-bold tracking-[0.2em] text-muted-foreground uppercase">{tr('history.title')}</h2>
           <span className="text-[10px] text-muted-foreground/50 font-mono">
-            ({stats?.data_points || 0} pts)
+            {tr('history.points', { count: stats?.data_points || 0 })}
           </span>
         </div>
 
@@ -89,7 +92,7 @@ export function HistoryCharts() {
             onClick={fetchData}
             disabled={loading}
             className="p-1 rounded hover:bg-white/5 text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
-            title="Refresh Data"
+            title={tr('history.refresh')}
           >
             <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -103,15 +106,15 @@ export function HistoryCharts() {
           <div className="bg-muted/5 border border-border/5 rounded p-2 flex flex-col justify-between">
             <div className="flex items-center gap-1.5 mb-1">
               <Zap className="h-3 w-3 text-blue-400" />
-              <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">Avg Input</span>
+              <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">{tr('history.avgInput')}</span>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-lg font-mono font-bold text-foreground">{stats.avg_input_voltage.toFixed(1)}</span>
               <span className="text-[10px] text-muted-foreground">V</span>
             </div>
             <div className="flex items-center justify-between mt-1 text-[9px] text-muted-foreground/70 font-mono">
-              <span>L: {stats.min_input_voltage.toFixed(0)}</span>
-              <span>H: {stats.max_input_voltage.toFixed(0)}</span>
+              <span>{tr('history.low', { value: stats.min_input_voltage.toFixed(0) })}</span>
+              <span>{tr('history.high', { value: stats.max_input_voltage.toFixed(0) })}</span>
             </div>
           </div>
 
@@ -119,14 +122,14 @@ export function HistoryCharts() {
           <div className="bg-muted/5 border border-border/5 rounded p-2 flex flex-col justify-between">
             <div className="flex items-center gap-1.5 mb-1">
               <TrendingUp className="h-3 w-3 text-orange-400" />
-              <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">Max Load</span>
+              <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">{tr('history.maxLoad')}</span>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-lg font-mono font-bold text-foreground">{stats.max_load.toFixed(0)}</span>
               <span className="text-[10px] text-muted-foreground">%</span>
             </div>
             <div className="flex items-center mt-1 text-[9px] text-muted-foreground/70 font-mono">
-              <span>Avg: {stats.avg_load.toFixed(1)}%</span>
+              <span>{tr('history.avg', { value: stats.avg_load.toFixed(1) })}</span>
             </div>
           </div>
 
@@ -134,14 +137,14 @@ export function HistoryCharts() {
           <div className="bg-muted/5 border border-border/5 rounded p-2 flex flex-col justify-between">
             <div className="flex items-center gap-1.5 mb-1">
               <Battery className="h-3 w-3 text-emerald-400" />
-              <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">Min Batt</span>
+              <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">{tr('history.minBattery')}</span>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-lg font-mono font-bold text-foreground">{stats.min_battery.toFixed(0)}</span>
               <span className="text-[10px] text-muted-foreground">%</span>
             </div>
             <div className="flex items-center mt-1 text-[9px] text-muted-foreground/70 font-mono">
-              <span>Avg: {stats.avg_battery.toFixed(1)}%</span>
+              <span>{tr('history.avg', { value: stats.avg_battery.toFixed(1) })}</span>
             </div>
           </div>
 
@@ -149,14 +152,14 @@ export function HistoryCharts() {
           <div className="bg-muted/5 border border-border/5 rounded p-2 flex flex-col justify-between">
             <div className="flex items-center gap-1.5 mb-1">
               <AlertTriangle className={`h-3 w-3 ${stats.outages > 0 ? "text-red-500 animate-pulse" : "text-muted-foreground"}`} />
-              <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">Outages</span>
+              <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">{tr('history.outages')}</span>
             </div>
             <div className="flex items-baseline gap-1">
               <span className={`text-lg font-mono font-bold ${stats.outages > 0 ? "text-red-500" : "text-emerald-500"}`}>{stats.outages}</span>
-              <span className="text-[10px] text-muted-foreground">EVENTS</span>
+              <span className="text-[10px] text-muted-foreground">{tr('history.events')}</span>
             </div>
             <div className="flex items-center mt-1 text-[9px] text-muted-foreground/70 font-mono">
-              <span>In last {range}</span>
+              <span>{tr('history.inLast', { range })}</span>
             </div>
           </div>
         </div>
@@ -167,15 +170,15 @@ export function HistoryCharts() {
         <div className="flex flex-col min-h-0 bg-muted/5 rounded-lg p-3 border border-border/5 hover:border-border/10 transition-colors">
           <div className="flex items-center gap-2 mb-2 shrink-0">
             <Zap className="h-3 w-3 text-blue-400" />
-            <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Voltage Profile</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr('history.voltageProfile')}</h3>
             <div className="ml-auto flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-0.5 bg-blue-500 rounded-full"></div>
-                <span className="text-[9px] font-medium text-muted-foreground">Input</span>
+                <span className="text-[9px] font-medium text-muted-foreground">{tr('history.input')}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-0.5 bg-green-500 rounded-full"></div>
-                <span className="text-[9px] font-medium text-muted-foreground">Output</span>
+                <span className="text-[9px] font-medium text-muted-foreground">{tr('history.output')}</span>
               </div>
             </div>
           </div>
@@ -226,6 +229,7 @@ export function HistoryCharts() {
                 <Area
                   type="monotone"
                   dataKey="input_voltage"
+                  name={tr('history.inputVoltage')}
                   stroke="#3b82f6"
                   strokeWidth={1.5}
                   fillOpacity={1}
@@ -236,6 +240,7 @@ export function HistoryCharts() {
                 <Area
                   type="monotone"
                   dataKey="output_voltage"
+                  name={tr('history.outputVoltage')}
                   stroke="#22c55e"
                   strokeWidth={1.5}
                   fillOpacity={1}
@@ -252,15 +257,15 @@ export function HistoryCharts() {
         <div className="flex flex-col min-h-0 bg-muted/5 rounded-lg p-3 border border-border/5 hover:border-border/10 transition-colors">
           <div className="flex items-center gap-2 mb-2 shrink-0">
             <Activity className="h-3 w-3 text-orange-400" />
-            <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Load & Battery Capacity</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr('history.loadBattery')}</h3>
             <div className="ml-auto flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-0.5 bg-orange-500 rounded-full"></div>
-                <span className="text-[9px] font-medium text-muted-foreground">Load</span>
+                <span className="text-[9px] font-medium text-muted-foreground">{tr('history.load')}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-0.5 bg-emerald-500 rounded-full"></div>
-                <span className="text-[9px] font-medium text-muted-foreground">Battery</span>
+                <span className="text-[9px] font-medium text-muted-foreground">{tr('history.battery')}</span>
               </div>
             </div>
           </div>
@@ -310,6 +315,7 @@ export function HistoryCharts() {
                 <Area
                   type="monotone"
                   dataKey="load_percent"
+                  name={tr('history.load')}
                   stroke="#f97316"
                   strokeWidth={1.5}
                   fillOpacity={1}
@@ -320,6 +326,7 @@ export function HistoryCharts() {
                 <Area
                   type="monotone"
                   dataKey="battery_charge"
+                  name={tr('history.battery')}
                   stroke="#10b981"
                   strokeWidth={1.5}
                   fillOpacity={1}

@@ -25,6 +25,28 @@ pub struct ShutdownState(pub Arc<Mutex<ShutdownTracker>>);
 #[derive(Default)]
 pub struct PollingState(pub std::sync::Mutex<Option<tokio::task::AbortHandle>>);
 
+/// Native tray menu items, kept so their labels can follow the UI language.
+pub struct TrayMenuState {
+    pub show: tauri::menu::MenuItem<tauri::Wry>,
+    pub hide: tauri::menu::MenuItem<tauri::Wry>,
+    pub quit: tauri::menu::MenuItem<tauri::Wry>,
+}
+
+/// Updates the tray menu labels (called by the frontend when the language changes).
+#[tauri::command]
+pub fn set_tray_labels(
+    tray: State<'_, TrayMenuState>,
+    show: String,
+    hide: String,
+    quit: String,
+) -> Result<(), String> {
+    let clean = |s: String| -> String { s.chars().filter(|c| !c.is_control()).take(64).collect() };
+    tray.show.set_text(clean(show)).map_err(|e| e.to_string())?;
+    tray.hide.set_text(clean(hide)).map_err(|e| e.to_string())?;
+    tray.quit.set_text(clean(quit)).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Creates a simple 32x32 solid color circle icon programmatically
 fn create_status_icon(r: u8, g: u8, b: u8) -> tauri::image::Image<'static> {
     let size = 32;

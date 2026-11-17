@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { useUpsStore } from '../store/upsStore';
+import { t } from '../i18n';
 
 export function useNotifications() {
   const events = useUpsStore((state) => state.events);
@@ -26,13 +27,16 @@ export function useNotifications() {
         lastEventId.current = latestEvent.id;
 
         // Map common status transitions to human-friendly messages
+        // Status words are compared as whole words ("OL CHRG" → "OB DISCHRG" is still a power loss).
+        const [from = '', to = ''] = latestEvent.message.split(' → ');
+        const has = (s: string, flag: string) => s.split(' ').includes(flag);
         let detail = latestEvent.message;
-        if (latestEvent.message.includes('OL → OB')) detail = '⚠️ Power Lost! UPS is now running on Battery.';
-        if (latestEvent.message.includes('OB → OL')) detail = '✅ Power Restored! System is back on AC power.';
-        if (latestEvent.message.includes('LB')) detail = '🚨 CRITICAL: Battery is Low!';
+        if (has(from, 'OL') && has(to, 'OB')) detail = t('notify.powerLost');
+        if (has(from, 'OB') && has(to, 'OL')) detail = t('notify.powerRestored');
+        if (has(to, 'LB') && !has(from, 'LB')) detail = t('notify.lowBattery');
 
         sendNotification({
-          title: latestEvent.type === 'warning' ? 'WinNUT Alert' : 'WinNUT StatusUpdate',
+          title: latestEvent.type === 'warning' ? t('notify.alertTitle') : t('notify.statusTitle'),
           body: detail,
         });
       }

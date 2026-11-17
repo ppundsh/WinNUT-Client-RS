@@ -43,14 +43,17 @@ pub fn run() {
             }
             app.manage(commands::DbState(Arc::new(Mutex::new(Some(db)))));
 
-            let tray_menu = Menu::with_items(
-                app,
-                &[
-                    &MenuItem::with_id(app, "show", "Show Main Window", true, None::<&str>)?,
-                    &MenuItem::with_id(app, "hide", "Hide to Tray", true, None::<&str>)?,
-                    &MenuItem::with_id(app, "quit", "Exit Application", true, None::<&str>)?,
-                ],
-            )?;
+            // English defaults; the frontend replaces them with the UI language on start-up
+            // (command `set_tray_labels`).
+            let show_item = MenuItem::with_id(app, "show", "Show Main Window", true, None::<&str>)?;
+            let hide_item = MenuItem::with_id(app, "hide", "Hide to Tray", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Exit Application", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&show_item, &hide_item, &quit_item])?;
+            app.manage(commands::TrayMenuState {
+                show: show_item,
+                hide: hide_item,
+                quit: quit_item,
+            });
 
             let _tray = TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
@@ -104,7 +107,8 @@ pub fn run() {
             commands::run_ups_command,
             commands::get_chart_data,
             commands::get_history_stats,
-            commands::clean_history_data
+            commands::clean_history_data,
+            commands::set_tray_labels
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

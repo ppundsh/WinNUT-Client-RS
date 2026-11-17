@@ -1,10 +1,12 @@
 import { CheckCircle2, AlertTriangle, Battery, ZapOff } from "lucide-react";
+import { useT } from "@/i18n";
 
 interface PowerStatusProps {
   status: string;
 }
 
 export function PowerStatus({ status }: PowerStatusProps) {
+  const tr = useT();
   const isOnline = status.includes("OL");
   const isOnBattery = status.includes("OB");
   const isLowBattery = status.includes("LB");
@@ -22,29 +24,29 @@ export function PowerStatus({ status }: PowerStatusProps) {
 
   return (
     <div className="flex flex-col">
-      <h3 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-1">State</h3>
+      <h3 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-1">{tr("state.title")}</h3>
       <div className="divide-y divide-border/50">
         <Indicator
           active={isOnline}
-          label="Online"
+          label={tr("state.online")}
           colorClass="text-green-600"
           icon={CheckCircle2}
         />
         <Indicator
           active={isOnBattery}
-          label="On Battery"
+          label={tr("state.onBattery")}
           colorClass="text-orange-500"
           icon={Battery}
         />
         <Indicator
           active={isLowBattery}
-          label="Low Battery"
+          label={tr("state.lowBattery")}
           colorClass="text-red-500"
           icon={AlertTriangle}
         />
         <Indicator
           active={isOverload}
-          label="Overload"
+          label={tr("state.overload")}
           colorClass="text-red-600"
           icon={ZapOff}
         />

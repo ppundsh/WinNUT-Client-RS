@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { UpsState, UpsData } from '../types/ups';
+import { resolveLang } from '../i18n/languages';
 
 export const useUpsStore = create<UpsState>()(
   persist(
@@ -22,13 +23,14 @@ export const useUpsStore = create<UpsState>()(
       },
       supportedCommands: [],
       theme: 'system',
+      language: 'system',
 
       events: [],
 
       setUpsData: (data: UpsData) =>
         set((state) => {
           const now = new Date();
-          const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const timeStr = now.toLocaleTimeString(resolveLang(state.language), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
           // 0. Detect status changes for Event Log
           const oldStatus = state.data?.status;
@@ -91,6 +93,7 @@ export const useUpsStore = create<UpsState>()(
       setShutdownConfig: (shutdownConfig) => set({ shutdownConfig }),
       setSupportedCommands: (supportedCommands) => set({ supportedCommands }),
       setTheme: (theme) => set({ theme }),
+      setLanguage: (language) => set({ language }),
       clearEvents: () => set({ events: [] }),
     }),
     {
@@ -102,6 +105,7 @@ export const useUpsStore = create<UpsState>()(
         shutdownConfig: state.shutdownConfig,
         events: state.events,
         theme: state.theme,
+        language: state.language,
       }),
     }
   )

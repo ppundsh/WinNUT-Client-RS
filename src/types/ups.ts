@@ -1,3 +1,5 @@
+import type { LangSetting } from '../i18n/languages';
+
 export interface UpsData {
   status: string;
   battery_charge?: number;
@@ -85,6 +87,8 @@ export interface UpsState {
   shutdownConfig: ShutdownConfig; // Persistence for shutdown logic
   supportedCommands: string[]; // List of commands the UPS supports
   theme: 'system' | 'light' | 'dark' | 'catppuccin' | 'dracula' | 'nord' | 'monokai' | 'github-dark';
+  language: LangSetting;
+  setLanguage: (language: LangSetting) => void;
   setUpsData: (data: UpsData) => void;
   setError: (error: string | null) => void;
   setConnected: (isConnected: boolean) => void;

@@ -1,3 +1,4 @@
+import { useT } from '@/i18n';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 interface LoadChartProps {
@@ -5,6 +6,7 @@ interface LoadChartProps {
 }
 
 export function LoadChart({ data }: LoadChartProps) {
+  const tr = useT();
   return (
     <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -64,7 +66,7 @@ export function LoadChart({ data }: LoadChartProps) {
             strokeWidth={1.5}
             fillOpacity={1}
             fill="url(#colorLoad)"
-            name="Load"
+            name={tr("chart.load")}
             isAnimationActive={false}
           />
           <Area
@@ -75,7 +77,7 @@ export function LoadChart({ data }: LoadChartProps) {
             strokeWidth={1.5}
             fillOpacity={1}
             fill="url(#colorWatts)"
-            name="Power"
+            name={tr("chart.power")}
             isAnimationActive={false}
           />
         </AreaChart>
