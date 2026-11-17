@@ -1,4 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod autostart;
 mod commands;
 pub mod db;
 pub mod nut;
@@ -19,7 +20,6 @@ use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_log::Builder::default().build())
@@ -110,7 +110,9 @@ pub fn run() {
             commands::clean_history_data,
             commands::set_tray_labels,
             commands::test_nut_connection,
-            commands::get_power_capabilities
+            commands::get_power_capabilities,
+            autostart::autostart_status,
+            autostart::set_autostart
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

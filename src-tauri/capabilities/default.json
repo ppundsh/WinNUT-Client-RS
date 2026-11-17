@@ -17,7 +17,6 @@
     "notification:allow-notify",
     "notification:default",
     "updater:default",
-    "process:default",
-    "autostart:default"
+    "process:default"
   ]
 }

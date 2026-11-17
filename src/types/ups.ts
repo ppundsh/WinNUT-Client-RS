@@ -34,6 +34,15 @@ export interface UpsData {
   extended_vars?: Record<string, string>;
 }
 
+/** Result of the `autostart_status` / `set_autostart` commands. */
+export interface AutostartStatus {
+  supported: boolean;
+  enabled: boolean;
+  stalePath: boolean;
+  disabledByUser: boolean;
+  command: string | null;
+}
+
 /** Result of the `get_power_capabilities` command. */
 export interface PowerCapabilities {
   sleep: boolean;

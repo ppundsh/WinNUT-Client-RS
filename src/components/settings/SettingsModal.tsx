@@ -13,10 +13,9 @@ import { Download, RefreshCw, RotateCw } from 'lucide-react';
 import { MdPalette } from "react-icons/md";
 import { FaMoon, FaSun, FaDesktop, FaCat, FaSnowflake, FaGhost, FaCode, FaGithub } from "react-icons/fa";
 import { getVersion } from '@tauri-apps/api/app';
-import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 import { useT, describeError, LANGUAGES, type LangSetting } from '@/i18n';
 import { Languages } from 'lucide-react';
-import type { ConnectionTest, PowerCapabilities } from '../../types/ups';
+import type { AutostartStatus, ConnectionTest, PowerCapabilities } from '../../types/ups';
 
 export function SettingsModal() {
   const { config, setConfig, setConnected, ratedPower, setRatedPower, fullLoadRuntime, setFullLoadRuntime, shutdownConfig, setShutdownConfig, setSupportedCommands, theme, setTheme, language, setLanguage, setError, showEmptyMetrics, setShowEmptyMetrics } = useUpsStore();
@@ -30,12 +29,20 @@ export function SettingsModal() {
   // Updater
   const { status: updateStatus, error: updateError, progress: updateProgress, newVersion, checkUpdate, installUpdate, restartApp } = useUpdater();
 
-  // Autostart State
-  const [autostartProxy, setAutostartProxy] = useState(false);
+  // Start with Windows: state read back from the registry by the backend (autostart.rs).
+  const [autostart, setAutostart] = useState<AutostartStatus | null>(null);
+  const [autostartError, setAutostartError] = useState<string | null>(null);
+  const [autostartBusy, setAutostartBusy] = useState(false);
+  const autostartOn = autostart?.enabled ?? false;
+
+  // keepError: after a failed change, refresh the switch but keep the error visible.
+  const refreshAutostart = (keepError = false) =>
+    invoke<AutostartStatus>('autostart_status')
+      .then((st) => { setAutostart(st); if (!keepError) setAutostartError(null); })
+      .catch((e) => setAutostartError(String(e)));
 
   useEffect(() => {
     getVersion().then(setAppVersion);
-    isEnabled().then(setAutostartProxy).catch(console.error);
   }, []);
 
   // Sleep / hibernate availability of this PC (re-checked whenever the dialog opens,
@@ -45,7 +52,7 @@ export function SettingsModal() {
   // Sync autostart status and power capabilities when modal opens
   useEffect(() => {
     if (open) {
-      isEnabled().then(setAutostartProxy).catch(console.error);
+      refreshAutostart();
       invoke<PowerCapabilities>('get_power_capabilities').then(setPowerCaps).catch(() => setPowerCaps(null));
     }
   }, [open]);
@@ -54,22 +61,23 @@ export function SettingsModal() {
     action === 'Shutdown' || powerCaps === null ? true : action === 'Hibernate' ? powerCaps.hibernate : powerCaps.sleep;
 
   const toggleAutostart = async (checked: boolean) => {
-    // Optimistic update
-    setAutostartProxy(checked);
-
+    if (autostartBusy) return;
+    setAutostartBusy(true);
     try {
-      if (checked) {
-        await enable();
-        toast.success(tr("settings.autostart.enabled"));
-      } else {
-        await disable();
-        toast.info(tr("settings.autostart.disabled"));
-      }
+      // The backend writes the registry, reads it back and fails if the change did not stick.
+      const st = await invoke<AutostartStatus>('set_autostart', { enabled: checked });
+      setAutostart(st);
+      setAutostartError(null);
+      if (checked) toast.success(tr("settings.autostart.enabled"));
+      else toast.info(tr("settings.autostart.disabled"));
     } catch (e) {
       console.error("Autostart toggle failed:", e);
-      toast.error(tr('settings.autostart.error', { error: e instanceof Error ? e.message : String(e) }));
-      // Revert UI if failed
-      setAutostartProxy(!checked);
+      const msg = e instanceof Error ? e.message : String(e);
+      setAutostartError(msg);
+      toast.error(tr('settings.autostart.error', { error: msg }));
+      refreshAutostart(true);
+    } finally {
+      setAutostartBusy(false);
     }
   };
 
@@ -361,16 +369,28 @@ export function SettingsModal() {
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold uppercase tracking-wider">{tr('settings.autostart')}</Label>
                     <p className="text-[10px] text-muted-foreground">{tr('settings.autostart.desc')}</p>
+                    {autostartError && (
+                      <p className="text-[10px] leading-snug text-red-500">{tr('settings.autostart.error', { error: autostartError })}</p>
+                    )}
+                    {!autostartError && autostart?.disabledByUser && (
+                      <p className="text-[10px] leading-snug text-amber-600 dark:text-amber-400">{tr('settings.autostart.disabledByUser')}</p>
+                    )}
+                    {!autostartError && autostart?.stalePath && (
+                      <p className="text-[10px] leading-snug text-amber-600 dark:text-amber-400" title={autostart.command ?? ''}>{tr('settings.autostart.stalePath')}</p>
+                    )}
+                    {autostart && !autostart.supported && (
+                      <p className="text-[10px] leading-snug text-muted-foreground">{tr('settings.autostart.unsupported')}</p>
+                    )}
                   </div>
                   <div className="flex items-center">
-                    <div className="flex items-center">
-                      {/* Reliable Div-based Toggle */}
-                      <div
-                        onClick={() => toggleAutostart(!autostartProxy)}
-                        className={`w-9 h-5 rounded-full cursor-pointer transition-colors relative ${autostartProxy ? 'bg-primary' : 'bg-muted dark:bg-zinc-700'}`}
-                      >
-                        <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${autostartProxy ? 'translate-x-full border-white' : ''}`} />
-                      </div>
+                    <div
+                      role="switch"
+                      aria-checked={autostartOn}
+                      aria-busy={autostartBusy}
+                      onClick={() => toggleAutostart(!autostartOn)}
+                      className={`shrink-0 w-9 h-5 rounded-full cursor-pointer transition-colors relative ${autostartOn ? 'bg-primary' : 'bg-muted dark:bg-zinc-700'} ${autostartBusy ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${autostartOn ? 'translate-x-full border-white' : ''}`} />
                     </div>
                   </div>
                 </div>
