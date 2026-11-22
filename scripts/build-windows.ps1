@@ -9,7 +9,7 @@
       2. bun install（依 bun.lock，不升級套件）
       3. 翻譯檢查 + TypeScript 型別檢查
       4. cargo test（含 NUT 協定解析與模擬伺服器測試）
-      5. bun tauri build → 產生 .msi 與 .exe 安裝檔
+      5. bun tauri build → 產生 -setup.exe 安裝檔
     完整輸出寫入專案根目錄的 checks.log。
 
 .PARAMETER InstallMissing

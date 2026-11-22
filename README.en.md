@@ -75,7 +75,11 @@
 ## 🚀 Installation
 
 ### Download Binary
-Go to the [Releases](https://github.com/ppundsh/WinNUT-Client-RS/releases) page and download the latest `.msi` installer.
+Go to the [Releases](https://github.com/ppundsh/WinNUT-Client-RS/releases) page and download the latest `WinNUT.Rust.Client_<version>_x64-setup.exe` (per-user, no admin rights needed).
+
+> Up to v0.1.10 both an `.msi` and a `-setup.exe` were published, and the updater could leave two copies installed
+> (two "WinNUT Rust Client" entries in Installed apps). From v0.1.11 only the `-setup.exe` is shipped, and it removes
+> a leftover MSI copy during install (one admin prompt).
 
 ### Prerequisites
 - A running **NUT (Network UPS Tools)** server (e.g., on a Raspberry Pi, Synology NAS, or Linux server).
@@ -149,7 +153,7 @@ bun run tauri dev
 
 `build.cmd` (double-click) or `scripts\build-windows.ps1` checks the toolchain (Rust MSVC, Bun,
 Visual Studio C++ Build Tools, WebView2), runs the i18n check, the TypeScript check and
-`cargo test`, then builds the `.msi` / `-setup.exe` installers into
+`cargo test`, then builds the `-setup.exe` installer into
 `src-tauri\target\release\bundle\`. Everything is logged to `checks.log`.
 
 ```powershell

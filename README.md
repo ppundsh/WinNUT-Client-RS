@@ -75,7 +75,10 @@
 ## 🚀 安裝
 
 ### 下載安裝檔
-到 [Releases](https://github.com/ppundsh/WinNUT-Client-RS/releases) 頁面下載最新的 `.msi` 安裝檔。
+到 [Releases](https://github.com/ppundsh/WinNUT-Client-RS/releases) 頁面下載最新的 `WinNUT.Rust.Client_<版本>_x64-setup.exe`（免系統管理員權限，安裝到目前使用者）。
+
+> v0.1.10 以前同時提供 `.msi` 與 `-setup.exe`，自動更新可能讓電腦裝了兩份（「已安裝的應用程式」出現兩個 WinNUT Rust Client）。
+> 從 v0.1.11 起只提供 `-setup.exe`，安裝時會自動移除舊的 MSI 版本（會跳出一次系統管理員確認）。
 
 ### 需求
 - 一台執行中的 **NUT（Network UPS Tools）** 伺服器，例如 Raspberry Pi、Synology / QNAP NAS 或 Linux 主機。
@@ -149,7 +152,7 @@ bun run tauri dev
 
 雙擊 `build.cmd`，或執行 `scripts\build-windows.ps1`。它會檢查建置工具（Rust MSVC、Bun、
 Visual Studio C++ Build Tools、WebView2），依序執行翻譯檢查、TypeScript 型別檢查與
-`cargo test`，最後在 `src-tauri\target\release\bundle\` 產生 `.msi` 與 `-setup.exe` 安裝檔。
+`cargo test`，最後在 `src-tauri\target\release\bundle\` 產生 `-setup.exe` 安裝檔。
 完整輸出記錄在 `checks.log`。
 
 ```powershell
